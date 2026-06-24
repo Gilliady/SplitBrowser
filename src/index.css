@@ -1,0 +1,222 @@
+/* ===== Reset & Base ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  font-family: 'Inter', sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  color: #e2e8f0;
+}
+
+/* ===== Toolbar ===== */
+#toolbar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  background: rgba(15, 15, 35, 0.92);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(124, 58, 237, 0.15);
+  opacity: 0.4;
+  transition: opacity 0.3s ease;
+  z-index: 100;
+  position: relative;
+  flex-shrink: 0;
+}
+
+#toolbar:hover {
+  opacity: 1.0;
+}
+
+/* ===== Drag Handle ===== */
+#drag-handle {
+  -webkit-app-region: drag;
+  width: 24px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+#drag-handle svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===== Toolbar Buttons ===== */
+.toolbar-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+.toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Click-Through Active State */
+#btn-click-through.active {
+  background: rgba(124, 58, 237, 0.25);
+  color: #7c3aed;
+  box-shadow: 0 0 8px rgba(124, 58, 237, 0.3);
+}
+
+/* Close Button Hover */
+#btn-close:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* ===== Opacity Control ===== */
+#opacity-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+  margin-left: auto;
+}
+
+#opacity-control svg {
+  width: 14px;
+  height: 14px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+/* Custom Range Input */
+#opacity-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+#opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #7c3aed;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px rgba(124, 58, 237, 0.4);
+}
+
+#opacity-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #7c3aed;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 4px rgba(124, 58, 237, 0.4);
+}
+
+#opacity-slider::-moz-range-track {
+  width: 80px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  border: none;
+}
+
+#opacity-value {
+  font-size: 11px;
+  color: #94a3b8;
+  width: 28px;
+  text-align: right;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+}
+
+/* ===== Webview Container ===== */
+#webview-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#site-view {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* ===== Loading Overlay ===== */
+#loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(15, 15, 35, 0.9);
+  color: #94a3b8;
+  font-size: 13px;
+  transition: opacity 0.3s ease;
+  z-index: 10;
+}
+
+#loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ===== Spinner ===== */
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ===== Click-Through Active Body State ===== */
+.click-through-active #toolbar {
+  border-bottom-color: rgba(124, 58, 237, 0.4);
+}

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+
+  <!-- Titlebar -->
+  <div id="titlebar">
+    <div id="titlebar-drag">
+      <svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" fill="none" width="16" height="16">
+        <circle cx="8" cy="8" r="5.5"/>
+        <path d="M8 5.5v5M6 8.5l2 2 2-2"/>
+      </svg>
+      <span>Settings</span>
+    </div>
+    <button id="btn-close-settings" title="Close">
+      <svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" fill="none" width="16" height="16">
+        <path d="M4 4l8 8M12 4l-8 8"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Settings Form -->
+  <div id="settings-form">
+
+    <!-- Website URL -->
+    <div class="form-section">
+      <h3>Website URL</h3>
+      <p class="form-hint">Enter the website address to display in the overlay</p>
+      <div class="input-group">
+        <svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" fill="none" width="16" height="16">
+          <circle cx="8" cy="8" r="6.5"/>
+          <ellipse cx="8" cy="8" rx="3" ry="6.5"/>
+          <path d="M2 6h12M2 10h12"/>
+        </svg>
+        <input type="text" id="input-url" placeholder="https://example.com" spellcheck="false" autocomplete="off">
+      </div>
+    </div>
+
+    <!-- Appearance -->
+    <div class="form-section">
+      <h3>Appearance</h3>
+      <div class="form-row">
+        <label for="input-opacity">Default Opacity</label>
+        <div class="slider-group">
+          <input type="range" id="input-opacity" min="10" max="100" value="85">
+          <span id="opacity-preview">85%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Behavior -->
+    <div class="form-section">
+      <h3>Behavior</h3>
+      <div class="form-row">
+        <div class="form-row-label">
+          <label for="input-always-on-top">Always on Top</label>
+          <p class="form-hint">Keep the overlay above all other windows</p>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="input-always-on-top">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="form-row">
+        <div class="form-row-label">
+          <label for="input-click-through">Click-Through</label>
+          <p class="form-hint">Allow mouse clicks to pass through the overlay</p>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="input-click-through">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Keyboard Shortcuts -->
+    <div class="form-section shortcuts-section">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="shortcut-row">
+        <span>Toggle Overlay</span>
+        <div>
+          <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd>
+        </div>
+      </div>
+      <div class="shortcut-row">
+        <span>Toggle Click-Through</span>
+        <div>
+          <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="form-actions">
+      <button class="btn btn-secondary" id="btn-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-save">Save Changes</button>
+    </div>
+
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>
