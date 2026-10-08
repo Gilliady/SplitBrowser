@@ -299,12 +299,12 @@ input[type="range"]::-moz-range-track {
 }
 
 /* ===== Keyboard Shortcuts ===== */
-.shortcuts-section .shortcut-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-}
+.shortcuts-section .shortcut-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.shortcuts-section .shortcut-row:last-child { border-bottom: none; }
+.shortcut-btn { background: #252547; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 6px 12px; font-family: 'Inter', sans-serif; font-size: 11px; color: #e2e8f0; cursor: pointer; transition: all 0.2s; min-width: 100px; text-align: center; font-weight: 500; }
+.shortcut-btn:hover { background: rgba(124,58,237,0.15); border-color: #7c3aed; }
+.shortcut-btn.listening { background: #7c3aed; color: white; border-color: #8b5cf6; box-shadow: 0 0 8px rgba(124,58,237,0.4); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
 .shortcuts-section .shortcut-row span {
   font-size: 13px;
@@ -368,4 +368,21 @@ kbd {
 
 .btn-primary:active {
   transform: scale(0.97);
+}
+
+.form-select {
+  background: #252547;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #e2e8f0;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.form-select:focus {
+  border-color: #7c3aed;
 }

@@ -1,7 +1,23 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, nativeImage, screen, session, webContents } = require('electron');
 const path = require('path');
-const store = require('./store');
+const { getStore } = require('./store');
 
+// Chromium switches para controle estrito de consumo de RAM (evita explosão de memória de 16GB)
+// 1. Limita o heap V8 por processo a 600MB (ao invés do padrão ilimitado de 4GB por aba)
+app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=600');
+
+// 2. Limita o cache em disco e cache de mídia para valores controlados
+app.commandLine.appendSwitch('disk-cache-size', '104857600'); // 100 MB máximo
+app.commandLine.appendSwitch('media-cache-size', '52428800'); // 50 MB máximo
+
+// 3. Desativa BackForwardCache (que armazena páginas inteiras congeladas na RAM)
+app.commandLine.appendSwitch('disable-features', 'BackForwardCache');
+
+// 4. Compatibilidade e resiliência de rede
+app.commandLine.appendSwitch('ignore-certificate-errors');
+app.commandLine.appendSwitch('allow-running-insecure-content');
+
+let store = null;
 let mainWindow = null;
 let settingsWindow = null;
 let tray = null;
@@ -116,13 +132,22 @@ function createTrayIcon() {
 // ---------------------------------------------------------------------------
 
 function createMainWindow() {
-  const savedBounds = store.get('windowBounds');
+  if (!store) {
+    console.error('Store not ready in createMainWindow');
+    return;
+  }
+  const savedBounds = store.get('windowBounds') || {};
   const displays = screen.getAllDisplays();
   const primaryDisplay = screen.getPrimaryDisplay();
 
+  const targetWidth = (savedBounds && savedBounds.width && savedBounds.width >= 600) ? savedBounds.width : 1200;
+  const targetHeight = (savedBounds && savedBounds.height && savedBounds.height >= 400) ? savedBounds.height : 780;
+
   const windowOptions = {
-    width: savedBounds.width || 420,
-    height: savedBounds.height || 650,
+    width: targetWidth,
+    height: targetHeight,
+    minWidth: 480,
+    minHeight: 360,
     transparent: true,
     frame: false,
     alwaysOnTop: store.get('alwaysOnTop'),
@@ -187,8 +212,8 @@ function createSettingsWindow() {
   }
 
   settingsWindow = new BrowserWindow({
-    width: 500,
-    height: 550,
+    width: 520,
+    height: 640,
     frame: false,
     resizable: false,
     parent: mainWindow,
@@ -208,6 +233,83 @@ function createSettingsWindow() {
   settingsWindow.on('closed', () => {
     settingsWindow = null;
   });
+}
+
+// ---------------------------------------------------------------------------
+// RAM Optimization & Garbage Collection System
+// ---------------------------------------------------------------------------
+
+function trimWindowsMemory() {
+  if (process.platform !== 'win32') return;
+  try {
+    const psCmd = `
+      $c = @'
+      using System;
+      using System.Runtime.InteropServices;
+      public class WinMem { [DllImport("psapi.dll")] public static extern int EmptyWorkingSet(IntPtr h); }
+'@;
+      Add-Type $c -ErrorAction SilentlyContinue;
+      Get-Process -Name "electron" -ErrorAction SilentlyContinue | ForEach-Object {
+        try { [WinMem]::EmptyWorkingSet($_.Handle) | Out-Null } catch {}
+      }
+    `;
+    const { exec } = require('child_process');
+    exec(`powershell -NoProfile -NonInteractive -Command "${psCmd.replace(/\r?\n/g, ' ')}"`, (err) => {
+      if (err) console.warn('Memory trim notice:', err.message);
+    });
+  } catch (err) {
+    console.warn('Trim invocation notice:', err.message);
+  }
+}
+
+async function performRamOptimization() {
+  try {
+    // 1. Limpar cache em todas as sessões (defaultSession E sessões particionadas persist:shared)
+    const sessionsToClean = [
+      session.defaultSession,
+      session.fromPartition('persist:shared')
+    ];
+
+    for (const ses of sessionsToClean) {
+      if (ses) {
+        try {
+          await ses.clearCache();
+          await ses.clearCodeCaches({});
+          await ses.clearStorageData({ storages: ['cachestorage'] });
+        } catch (e) {
+          console.warn('Error clearing session cache:', e.message);
+        }
+      }
+    }
+
+    // 2. Acionar Garbage Collector do V8 em todos os WebContents com timeout de segurança
+    const allWc = webContents.getAllWebContents();
+    for (const wc of allWc) {
+      if (wc && !wc.isDestroyed()) {
+        try {
+          Promise.race([
+            wc.executeJavaScript('if (typeof window !== "undefined" && window.gc) window.gc(); void 0;', true),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 500))
+          ]).catch(() => {});
+        } catch (e) {}
+      }
+    }
+
+    // 3. Forçar GC no processo principal do Node.js
+    if (global.gc) {
+      global.gc();
+    }
+
+    // 4. Esvaziar páginas inativas do Working Set no Windows
+    if (process.platform === 'win32') {
+      trimWindowsMemory();
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('Falha ao otimizar RAM:', err);
+    return { success: false, error: err.message };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -234,16 +336,47 @@ function registerIPC() {
   ipcMain.handle('get-settings', () => {
     return {
       url: store.get('url'),
+      defaultUrl: store.get('defaultUrl') || 'https://google.com',
       opacity: store.get('opacity'),
       clickThrough: store.get('clickThrough'),
       alwaysOnTop: store.get('alwaysOnTop'),
-      windowBounds: store.get('windowBounds')
+      windowBounds: store.get('windowBounds'),
+      shortcutClickThrough: store.get('shortcutClickThrough'),
+      shortcutVisibility: store.get('shortcutVisibility'),
+      hibernateTimeoutMinutes: store.get('hibernateTimeoutMinutes') || 30
     };
+  });
+
+  // Workspaces State
+  ipcMain.handle('get-workspaces-state', () => {
+    return {
+      workspaces: store.get('workspaces') || [],
+      activeWorkspaceId: store.get('activeWorkspaceId') || 'ws-default',
+      defaultUrl: store.get('defaultUrl') || 'https://google.com',
+      hibernateTimeoutMinutes: store.get('hibernateTimeoutMinutes') || 30
+    };
+  });
+
+  ipcMain.handle('save-workspaces-state', (_event, state) => {
+    if (state && Array.isArray(state.workspaces)) {
+      store.set('workspaces', state.workspaces);
+    }
+    if (state && state.activeWorkspaceId) {
+      store.set('activeWorkspaceId', state.activeWorkspaceId);
+    }
+    return { success: true };
+  });
+
+  // RAM Optimization & Cache Pruning
+  ipcMain.handle('optimize-ram', async () => {
+    return await performRamOptimization();
   });
 
   // Save settings
   ipcMain.handle('save-settings', (_event, data) => {
     if (data.url !== undefined) store.set('url', data.url);
+    if (data.defaultUrl !== undefined) store.set('defaultUrl', data.defaultUrl);
+    if (data.hibernateTimeoutMinutes !== undefined) store.set('hibernateTimeoutMinutes', data.hibernateTimeoutMinutes);
     if (data.opacity !== undefined) {
       store.set('opacity', data.opacity);
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -266,15 +399,31 @@ function registerIPC() {
         mainWindow.setAlwaysOnTop(data.alwaysOnTop);
       }
     }
+    
+    let shortcutsChanged = false;
+    if (data.shortcutClickThrough !== undefined && data.shortcutClickThrough !== store.get('shortcutClickThrough')) {
+      store.set('shortcutClickThrough', data.shortcutClickThrough);
+      shortcutsChanged = true;
+    }
+    if (data.shortcutVisibility !== undefined && data.shortcutVisibility !== store.get('shortcutVisibility')) {
+      store.set('shortcutVisibility', data.shortcutVisibility);
+      shortcutsChanged = true;
+    }
+
+    if (shortcutsChanged) {
+      registerGlobalShortcuts();
+    }
 
     // Notify main window renderer
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('settings-updated', {
         url: store.get('url'),
+        defaultUrl: store.get('defaultUrl'),
         opacity: store.get('opacity'),
         clickThrough: store.get('clickThrough'),
         alwaysOnTop: store.get('alwaysOnTop'),
-        windowBounds: store.get('windowBounds')
+        windowBounds: store.get('windowBounds'),
+        hibernateTimeoutMinutes: store.get('hibernateTimeoutMinutes')
       });
     }
 
@@ -356,44 +505,84 @@ function createTray() {
 // ---------------------------------------------------------------------------
 
 function registerGlobalShortcuts() {
-  // Ctrl+Shift+O: Toggle click-through
-  globalShortcut.register('Ctrl+Shift+O', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
+  globalShortcut.unregisterAll();
 
-    const current = store.get('clickThrough');
-    const newState = !current;
-    store.set('clickThrough', newState);
+  const shortcutCT = store.get('shortcutClickThrough') || 'CommandOrControl+Shift+O';
+  const shortcutVis = store.get('shortcutVisibility') || 'CommandOrControl+Shift+H';
 
-    if (newState) {
-      mainWindow.setIgnoreMouseEvents(true, { forward: true });
-    } else {
-      mainWindow.setIgnoreMouseEvents(false);
-    }
+  // Toggle click-through
+  try {
+    globalShortcut.register(shortcutCT, () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
 
-    mainWindow.webContents.send('click-through-toggled', newState);
-  });
+      const current = store.get('clickThrough');
+      const newState = !current;
+      store.set('clickThrough', newState);
 
-  // Ctrl+Shift+H: Toggle visibility
-  globalShortcut.register('Ctrl+Shift+H', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (newState) {
+        mainWindow.setIgnoreMouseEvents(true, { forward: true });
+      } else {
+        mainWindow.setIgnoreMouseEvents(false);
+      }
 
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
-    } else {
-      mainWindow.show();
-    }
-  });
+      mainWindow.webContents.send('click-through-toggled', newState);
+    });
+  } catch (err) {
+    console.error('Failed to register click-through shortcut', err);
+  }
+
+  // Toggle visibility
+  try {
+    globalShortcut.register(shortcutVis, () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+      }
+    });
+  } catch (err) {
+    console.error('Failed to register visibility shortcut', err);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // App Lifecycle
 // ---------------------------------------------------------------------------
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  store = await getStore();
+
+  // Configurar tanto a defaultSession quanto a sessão persist:shared dos webviews
+  const targetSessions = [
+    session.defaultSession,
+    session.fromPartition('persist:shared')
+  ];
+
+  targetSessions.forEach(sess => {
+    if (!sess) return;
+
+    // Aceitar qualquer certificado mesmo com inconsistências
+    sess.setCertificateVerifyProc((request, callback) => {
+      callback(0); // 0 = Aceitar
+    });
+  });
+
   registerIPC();
   createMainWindow();
   createTray();
   registerGlobalShortcuts();
+
+  // Manutenção periódica automática a cada 10 minutos (previne acúmulo de cache/RAM após horas de uso)
+  setInterval(() => {
+    performRamOptimization().catch(() => {});
+  }, 10 * 60 * 1000);
+});
+
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+  event.preventDefault();
+  callback(true);
 });
 
 app.on('will-quit', () => {

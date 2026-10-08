@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   // Click-through: toggle ignoring mouse events
@@ -10,6 +10,20 @@ contextBridge.exposeInMainWorld('api', {
   // Settings CRUD
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (data) => ipcRenderer.invoke('save-settings', data),
+
+  // Workspaces & Tabs State
+  getWorkspacesState: () => ipcRenderer.invoke('get-workspaces-state'),
+  saveWorkspacesState: (state) => ipcRenderer.invoke('save-workspaces-state', state),
+
+  // RAM Optimization
+  optimizeRam: async () => {
+    try {
+      if (webFrame) {
+        webFrame.clearCache();
+      }
+    } catch (e) {}
+    return await ipcRenderer.invoke('optimize-ram');
+  },
 
   // Window management
   openSettings: () => ipcRenderer.send('open-settings'),
