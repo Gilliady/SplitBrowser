@@ -2,18 +2,23 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, globalShortcut, nativeImage, sc
 const path = require('path');
 const { getStore } = require('./store');
 
-// Chromium switches para controle estrito de consumo de RAM (evita explosão de memória de 16GB)
-// 1. Limita o heap V8 por processo a 600MB (ao invés do padrão ilimitado de 4GB por aba)
-app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=600');
+// Chromium switches para controle estrito de consumo de RAM e GPU (evita explosão de memória de 5-16GB)
+// 1. Limita o heap V8 por processo a 512MB (ao invés do padrão ilimitado de 4GB por aba)
+app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=512');
 
 // 2. Limita o cache em disco e cache de mídia para valores controlados
 app.commandLine.appendSwitch('disk-cache-size', '104857600'); // 100 MB máximo
 app.commandLine.appendSwitch('media-cache-size', '52428800'); // 50 MB máximo
 
-// 3. Desativa BackForwardCache (que armazena páginas inteiras congeladas na RAM)
-app.commandLine.appendSwitch('disable-features', 'BackForwardCache');
+// 3. Controle e contenção do processo de GPU (evita acúmulo de gigabytes em WebGL / Canvas / Skia)
+app.commandLine.appendSwitch('force-gpu-mem-available-mb', '512');
+app.commandLine.appendSwitch('disable-gpu-memory-buffer-compositor-resources');
 
-// 4. Compatibilidade e resiliência de rede
+// 4. Desativa BackForwardCache e ativa suspensão e throttling agressivo de abas/processos em segundo plano
+app.commandLine.appendSwitch('disable-features', 'BackForwardCache,MediaEngagementBypassAutoplayPolicies');
+app.commandLine.appendSwitch('enable-features', 'CalculateNativeWinOcclusion,IntensiveWakeUpThrottling');
+
+// 5. Compatibilidade e resiliência de rede
 app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('allow-running-insecure-content');
 
@@ -196,6 +201,14 @@ function createMainWindow() {
   mainWindow.on('move', saveBoundsDebounced);
   mainWindow.on('resize', saveBoundsDebounced);
 
+  // Otimizar imediatamente ao minimizar ou ocultar
+  mainWindow.on('minimize', () => {
+    performRamOptimization().catch(() => {});
+  });
+  mainWindow.on('hide', () => {
+    performRamOptimization().catch(() => {});
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -242,19 +255,22 @@ function createSettingsWindow() {
 function trimWindowsMemory() {
   if (process.platform !== 'win32') return;
   try {
-    const psCmd = `
-      $c = @'
-      using System;
-      using System.Runtime.InteropServices;
-      public class WinMem { [DllImport("psapi.dll")] public static extern int EmptyWorkingSet(IntPtr h); }
-'@;
-      Add-Type $c -ErrorAction SilentlyContinue;
-      Get-Process -Name "electron" -ErrorAction SilentlyContinue | ForEach-Object {
-        try { [WinMem]::EmptyWorkingSet($_.Handle) | Out-Null } catch {}
-      }
-    `;
+    const currentExe = path.basename(process.execPath, path.extname(process.execPath));
+    const script = `
+$ProgressPreference = 'SilentlyContinue'
+$c = @'
+using System;
+using System.Runtime.InteropServices;
+public class WinMem { [DllImport("psapi.dll")] public static extern int EmptyWorkingSet(IntPtr h); }
+'@
+Add-Type -TypeDefinition $c -ErrorAction SilentlyContinue
+Get-Process -Name "*${currentExe}*", "*Fixed Tool*", "*electron*" -ErrorAction SilentlyContinue | ForEach-Object {
+  try { [WinMem]::EmptyWorkingSet($_.Handle) | Out-Null } catch {}
+}
+`;
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
     const { exec } = require('child_process');
-    exec(`powershell -NoProfile -NonInteractive -Command "${psCmd.replace(/\r?\n/g, ' ')}"`, (err) => {
+    exec(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`, (err) => {
       if (err) console.warn('Memory trim notice:', err.message);
     });
   } catch (err) {
@@ -574,10 +590,10 @@ app.whenReady().then(async () => {
   createTray();
   registerGlobalShortcuts();
 
-  // Manutenção periódica automática a cada 10 minutos (previne acúmulo de cache/RAM após horas de uso)
+  // Manutenção periódica automática a cada 2 minutos (previne acúmulo de cache/RAM após horas de uso)
   setInterval(() => {
     performRamOptimization().catch(() => {});
-  }, 10 * 60 * 1000);
+  }, 2 * 60 * 1000);
 });
 
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {

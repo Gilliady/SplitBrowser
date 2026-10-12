@@ -249,6 +249,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderWorkspacesBar();
     updateWorkspaceStatus();
     saveStateDebounced();
+
+    if (window.api && window.api.optimizeRam) {
+      window.api.optimizeRam().catch(() => {});
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -727,6 +731,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       webview.src = tab.url || 'about:blank';
       webview.setAttribute('allowpopups', 'true');
       webview.setAttribute('partition', 'persist:shared');
+      webview.setAttribute('webpreferences', 'backgroundThrottling=true');
 
       // Webview Events
       webview.addEventListener('did-start-loading', () => {
@@ -873,6 +878,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       body.appendChild(sleepCard);
+      if (window.api && window.api.optimizeRam) {
+        window.api.optimizeRam().catch(() => {});
+      }
     }
 
     // Inicializar no estado correto
@@ -1041,6 +1049,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     updateWorkspaceStatus();
     saveStateDebounced();
+    if (window.api && window.api.optimizeRam) {
+      window.api.optimizeRam().catch(() => {});
+    }
     showToast(`💤 ${hibernatedCount} ${hibernatedCount === 1 ? 'janela suspensa' : 'janelas suspensas'} para liberar RAM!`);
   }
 
