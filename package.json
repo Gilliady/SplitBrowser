@@ -34,5 +34,8 @@
   },
   "dependencies": {
     "electron-store": "^11.0.2"
+  },
+  "overrides": {
+    "@electron/get": "^5.1.0"
   }
 }
