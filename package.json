@@ -2,6 +2,7 @@
   "name": "fixed-tool",
   "version": "1.0.0",
   "description": "Desktop overlay app - pin any website on top of all windows",
+  "author": "PeakGilli",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -16,7 +17,10 @@
       "output": "dist"
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "nsis": {
       "oneClick": false,
