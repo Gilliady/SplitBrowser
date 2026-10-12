@@ -10,9 +10,23 @@ app.commandLine.appendSwitch('js-flags', '--expose-gc --max-old-space-size=512')
 app.commandLine.appendSwitch('disk-cache-size', '104857600'); // 100 MB máximo
 app.commandLine.appendSwitch('media-cache-size', '52428800'); // 50 MB máximo
 
-// 3. Controle e contenção do processo de GPU (evita acúmulo de gigabytes em WebGL / Canvas / Skia)
-app.commandLine.appendSwitch('force-gpu-mem-available-mb', '512');
-app.commandLine.appendSwitch('disable-gpu-memory-buffer-compositor-resources');
+// 3. Controle e contenção estrita de VRAM e GPU (elimina vazamento de 4-6GB em jogos HTML5/Canvas/WebGL)
+// Desativa aceleração de 2D Canvas pela GPU: transfere rasterização 2D para a CPU (onde o GC limpa), poupando gigabytes de VRAM
+app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
+
+// Limita os caches internos do Skia e do pipeline gráfico (evita crescimento infinito de texturas e fontes)
+app.commandLine.appendSwitch('skia-resource-cache-limit-mb', '64');
+app.commandLine.appendSwitch('skia-font-cache-limit-mb', '16');
+app.commandLine.appendSwitch('gpu-program-cache-size-kb', '2048');
+
+// Desativa MSAA / Antialiasing pesado em WebGL (evita multiplicar o tamanho de framebuffers em VRAM)
+app.commandLine.appendSwitch('webgl-antialiasing-mode', 'none');
+
+// Força orçamento reduzido para tiled rasterization de GPU
+app.commandLine.appendSwitch('force-gpu-mem-available-mb', '256');
+
+// Limita contextos WebGL simultâneos ativos para forçar a reciclagem de recursos obsoletos
+app.commandLine.appendSwitch('max-active-webgl-contexts', '8');
 
 // 4. Desativa BackForwardCache e ativa suspensão e throttling agressivo de abas/processos em segundo plano
 app.commandLine.appendSwitch('disable-features', 'BackForwardCache,MediaEngagementBypassAutoplayPolicies');
@@ -153,7 +167,8 @@ function createMainWindow() {
     height: targetHeight,
     minWidth: 480,
     minHeight: 360,
-    transparent: true,
+    transparent: false,
+    backgroundColor: '#0d0e1b',
     frame: false,
     alwaysOnTop: store.get('alwaysOnTop'),
     hasShadow: false,
@@ -320,6 +335,21 @@ async function performRamOptimization() {
     if (process.platform === 'win32') {
       trimWindowsMemory();
     }
+
+    // 5. GPU Watchdog: monitora e recicla o processo de GPU caso acumule VRAM excessiva
+    try {
+      const metrics = app.getAppMetrics();
+      const gpuMetric = metrics.find(m => m.type === 'GPU');
+      if (gpuMetric && gpuMetric.memory) {
+        const gpuWorkingSetMB = (gpuMetric.memory.workingSetSize || 0) / 1024;
+        if (gpuWorkingSetMB > 750) {
+          try {
+            process.kill(gpuMetric.pid);
+            console.log(`[GPU Watchdog] Processo de GPU reciclado com sucesso (${Math.round(gpuWorkingSetMB)} MB liberados)`);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
 
     return { success: true };
   } catch (err) {
